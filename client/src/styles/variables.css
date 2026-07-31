@@ -1,0 +1,355 @@
+/* ============================================================
+   FinInsight v2.0 — 暗夜霓光 · 设计系统
+   Design: Glassmorphism + Neon Accent + Bento Grid + Pixel Geometry
+   ============================================================ */
+
+/* === Import Fonts === */
+@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700;800&display=swap');
+
+/* ============================================================
+   CSS Custom Properties
+   ============================================================ */
+:root {
+  /* --- Background System --- */
+  --bg-deep:       #09090f;
+  --bg-primary:    #12121f;
+  --bg-elevated:   #1a1a2e;
+  --bg-glass:      rgba(255, 255, 255, 0.03);
+  --bg-glass-hover:rgba(255, 255, 255, 0.05);
+
+  /* --- Neon Accent Colors --- */
+  --neon-purple:   #a78bfa;
+  --neon-mint:     #34d399;
+  --neon-pink:     #f472b6;
+  --neon-blue:     #60a5fa;
+  --neon-amber:    #fbbf24;
+  --neon-coral:    #fb7185;
+  --neon-indigo:   #818cf8;
+  --neon-lilac:    #c084fc;
+
+  /* --- Glow Variants --- */
+  --glow-purple:   0 0 20px rgba(167, 139, 250, 0.25);
+  --glow-mint:     0 0 20px rgba(52, 211, 153, 0.25);
+  --glow-pink:     0 0 16px rgba(244, 114, 182, 0.2);
+  --glow-blue:     0 0 20px rgba(96, 165, 250, 0.25);
+  --glow-amber:    0 0 20px rgba(251, 191, 36, 0.25);
+
+  /* --- Text --- */
+  --text-primary:  #f1f1f6;
+  --text-secondary:#a1a1aa;
+  --text-muted:    #52525b;
+  --text-inverse:  #09090f;
+
+  /* --- Glass Borders --- */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default:rgba(255, 255, 255, 0.08);
+  --border-active: rgba(167, 139, 250, 0.30);
+  --border-glow:   rgba(167, 139, 250, 0.15);
+
+  /* --- Radius --- */
+  --radius-sm:     10px;
+  --radius-md:     16px;
+  --radius-lg:     20px;
+  --radius-xl:     24px;
+  --radius-2xl:    32px;
+  --radius-full:   9999px;
+
+  /* --- Spacing --- */
+  --space-xs:      4px;
+  --space-sm:      8px;
+  --space-md:      16px;
+  --space-lg:      24px;
+  --space-xl:      32px;
+
+  /* --- Typography --- */
+  --font-display:  'Lexend', system-ui, sans-serif;
+  --font-body:     -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --fs-xs:         11px;
+  --fs-sm:         13px;
+  --fs-md:         15px;
+  --fs-lg:         20px;
+  --fs-xl:         26px;
+  --fs-2xl:        36px;
+  --fs-3xl:        48px;
+
+  /* --- Transitions --- */
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth:   cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast:      150ms;
+  --dur-normal:    300ms;
+  --dur-slow:      500ms;
+}
+
+/* ============================================================
+   Global Reset
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--bg-deep);
+  color: var(--text-primary);
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg-deep);
+  min-height: 100vh;
+  overflow-x: hidden;
+  line-height: 1.6;
+}
+
+#app {
+  max-width: 480px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  background: var(--bg-primary);
+}
+
+/* ============================================================
+   Glass Card Base
+   ============================================================ */
+.glass-card {
+  background: var(--bg-glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  transition: all var(--dur-normal) var(--ease-smooth);
+}
+
+.glass-card:hover {
+  border-color: var(--border-active);
+  box-shadow:
+    0 8px 32px rgba(167, 139, 250, 0.1),
+    0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+.glass-card.glow-purple { border-color: rgba(167, 139, 250, 0.2); }
+.glass-card.glow-mint   { border-color: rgba(52, 211, 153, 0.2); }
+.glass-card.glow-pink   { border-color: rgba(244, 114, 182, 0.2); }
+.glass-card.glow-blue   { border-color: rgba(96, 165, 250, 0.2); }
+.glass-card.glow-amber  { border-color: rgba(251, 191, 36, 0.2); }
+
+/* ============================================================
+   Geometric Icon System (Zero Emoji)
+   ============================================================ */
+.geo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  font-size: 18px;
+  font-family: var(--font-body);
+  transition: all var(--dur-normal) var(--ease-smooth);
+  flex-shrink: 0;
+}
+
+.geo-icon.sm { width: 28px; height: 28px; font-size: 14px; border-radius: 8px; }
+.geo-icon.lg { width: 56px; height: 56px; font-size: 28px; border-radius: 14px; }
+
+.geo-icon.glow-purple { color: var(--neon-purple); text-shadow: var(--glow-purple); border-color: rgba(167,139,250,0.15); }
+.geo-icon.glow-mint   { color: var(--neon-mint);   text-shadow: var(--glow-mint);   border-color: rgba(52,211,153,0.15); }
+.geo-icon.glow-pink   { color: var(--neon-pink);   text-shadow: var(--glow-pink);   border-color: rgba(244,114,182,0.15); }
+.geo-icon.glow-blue   { color: var(--neon-blue);   text-shadow: var(--glow-blue);   border-color: rgba(96,165,250,0.15); }
+.geo-icon.glow-amber  { color: var(--neon-amber);  text-shadow: var(--glow-amber);  border-color: rgba(251,191,36,0.15); }
+.geo-icon.glow-coral  { color: var(--neon-coral);  text-shadow: 0 0 16px rgba(251,113,133,0.25); border-color: rgba(251,113,133,0.15); }
+.geo-icon.glow-indigo { color: var(--neon-indigo); text-shadow: 0 0 20px rgba(129,140,248,0.3); border-color: rgba(129,140,248,0.15); }
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+.btn-glass {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: 12px 28px;
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-full);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: var(--fs-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--dur-normal) var(--ease-spring);
+  letter-spacing: 0.02em;
+}
+
+.btn-glass:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-active);
+  box-shadow: var(--glow-purple);
+  transform: translateY(-2px);
+}
+
+.btn-glass:active {
+  transform: scale(0.96);
+}
+
+.btn-glass.primary {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.35);
+  color: var(--neon-purple);
+}
+
+.btn-glass.primary:hover {
+  background: rgba(167, 139, 250, 0.22);
+  box-shadow: 0 0 32px rgba(167, 139, 250, 0.35);
+}
+
+.btn-glass.danger {
+  border-color: rgba(251, 113, 133, 0.25);
+  color: var(--neon-coral);
+}
+
+/* ============================================================
+   Input Fields
+   ============================================================ */
+.glass-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: var(--fs-md);
+  outline: none;
+  transition: all var(--dur-fast) var(--ease-smooth);
+}
+
+.glass-input:focus {
+  border-color: var(--border-active);
+  box-shadow: 0 0 0 3px rgba(167, 139, 250, 0.1);
+}
+
+.glass-input::placeholder { color: var(--text-muted); }
+
+/* ============================================================
+   Page Layout
+   ============================================================ */
+.page {
+  padding: var(--space-lg) var(--space-md);
+  padding-bottom: 100px;
+  min-height: 100vh;
+  animation: pageIn 0.4s var(--ease-spring) both;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-lg);
+}
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+/* ============================================================
+   Keyframes
+   ============================================================ */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes cardStagger {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 16px rgba(167,139,250,0.15); }
+  50%      { box-shadow: 0 0 32px rgba(167,139,250,0.3); }
+}
+
+@keyframes countIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-3px); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ============================================================
+   Utility Classes
+   ============================================================ */
+.card-stagger { animation: cardStagger 0.5s var(--ease-spring) both; }
+.stagger-1 { animation-delay: 0.00s; }
+.stagger-2 { animation-delay: 0.06s; }
+.stagger-3 { animation-delay: 0.12s; }
+.stagger-4 { animation-delay: 0.18s; }
+.stagger-5 { animation-delay: 0.24s; }
+.stagger-6 { animation-delay: 0.30s; }
+
+.text-purple { color: var(--neon-purple); }
+.text-mint   { color: var(--neon-mint); }
+.text-pink   { color: var(--neon-pink); }
+.text-blue   { color: var(--neon-blue); }
+.text-amber  { color: var(--neon-amber); }
+.text-coral  { color: var(--neon-coral); }
+.text-muted  { color: var(--text-muted); }
+.text-second { color: var(--text-secondary); }
+
+.fw-600 { font-weight: 600; }
+.fw-700 { font-weight: 700; }
+.fw-800 { font-weight: 800; }
+
+.mt-sm { margin-top: var(--space-sm); }
+.mt-md { margin-top: var(--space-md); }
+.mt-lg { margin-top: var(--space-lg); }
+.mb-sm { margin-bottom: var(--space-sm); }
+.mb-md { margin-bottom: var(--space-md); }
+.mb-lg { margin-bottom: var(--space-lg); }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+
+/* Vue Transitions */
+.fade-enter-active,
+.fade-leave-active { transition: opacity 0.25s var(--ease-smooth); }
+.fade-enter-from,
+.fade-leave-to { opacity: 0; }
+
+.slide-enter-active,
+.slide-leave-active { transition: all 0.35s var(--ease-spring); }
+.slide-enter-from { opacity: 0; transform: translateY(12px) scale(0.97); }
+.slide-leave-to   { opacity: 0; transform: translateY(-8px) scale(0.98); }
