@@ -1,4 +1,6 @@
-const BASE_URL = '/api'
+const BASE_URL = import.meta.env.PROD
+  ? 'https://fininsight-production.up.railway.app/api'
+  : '/api'
 
 function getHeaders(): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }
