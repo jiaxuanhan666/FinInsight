@@ -32,9 +32,9 @@ const hideNav = computed(() => route.name === 'login')
         <span class="nav-glyph">&#9681;</span>
         <span class="nav-label">AI 报告</span>
       </router-link>
-      <router-link to="/savings" class="nav-item" active-class="nav-item--active">
-        <span class="nav-glyph">&#9733;</span>
-        <span class="nav-label">攒钱</span>
+      <router-link to="/settings" class="nav-item" active-class="nav-item--active">
+        <span class="nav-glyph">&#9679;</span>
+        <span class="nav-label">我的</span>
       </router-link>
     </nav>
   </div>

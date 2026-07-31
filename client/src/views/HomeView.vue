@@ -108,7 +108,9 @@ onMounted(async () => {
         <div class="header-label">FinInsight</div>
         <div class="header-date">{{ new Date().toLocaleDateString('zh-CN', { month:'long', day:'numeric' }) }}</div>
       </div>
-      <div class="geo-icon glow-purple" style="cursor:pointer" @click="router.push('/settings')">&#9632;</div>
+      <button class="avatar-btn" @click="router.push('/settings')" aria-label="个人中心">
+        <span class="avatar-glyph">&#9679;</span>
+      </button>
     </div>
 
     <!-- Hero Card: Net Worth -->
@@ -251,8 +253,33 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+.page-header { display: flex; justify-content: space-between; align-items: flex-start; }
 .header-label { font-size: var(--fs-xs); color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; }
 .header-date { font-family: var(--font-display); font-size: var(--fs-xl); font-weight: 600; margin-top: 2px; }
+
+.avatar-btn {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(167, 139, 250, 0.1);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--dur-normal) var(--ease-spring);
+  flex-shrink: 0;
+}
+.avatar-btn:hover {
+  background: rgba(167, 139, 250, 0.18);
+  border-color: rgba(167, 139, 250, 0.4);
+  box-shadow: 0 0 16px rgba(167, 139, 250, 0.25);
+  transform: scale(1.05);
+}
+.avatar-btn:active { transform: scale(0.93); }
+.avatar-glyph {
+  font-size: 22px;
+  color: var(--neon-purple);
+  filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.4));
+  line-height: 1;
+}
 
 .hero-label { font-size: var(--fs-xs); color: var(--text-secondary); letter-spacing: 0.08em; margin-bottom: 4px; }
 .hero-amount { margin: 4px 0; }
