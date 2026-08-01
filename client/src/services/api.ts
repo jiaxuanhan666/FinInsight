@@ -49,26 +49,15 @@ export const api = {
   del: (path: string) => request('DELETE', path),
 }
 
-// sendBeacon 埋点上报
+// 埋点上报
 export function trackEvent(eventType: string) {
   const uuid = localStorage.getItem('fininsight_uuid')
   if (!uuid) return
 
-  const data = JSON.stringify({
-    userUuid: uuid,
-    eventType,
-    timestamp: Date.now(),
-  })
-
-  if (navigator.sendBeacon) {
-    navigator.sendBeacon(`${BASE_URL}/analytics/track`, new Blob([data], { type: 'application/json' }))
-  } else {
-    // 降级为 fetch
-    fetch(`${BASE_URL}/analytics/track`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: data,
-      keepalive: true,
-    }).catch(() => {})
-  }
+  fetch(`${BASE_URL}/analytics/track`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userUuid: uuid, eventType, timestamp: Date.now() }),
+    keepalive: true,
+  }).catch(() => {})
 }

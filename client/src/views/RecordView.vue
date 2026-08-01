@@ -67,6 +67,7 @@ function addCustomCategory() {
   form.value.categoryNote = name
   newCatName.value = ''
   showAddCat.value = false
+  trackEvent('category_custom_add')
 }
 
 function removeCustomCategory(name: string) {
@@ -285,6 +286,7 @@ async function confirmVoiceResult() {
   voiceTranscript.value = ''
   await Promise.all([txStore.fetchTransactions('month'), txStore.fetchSummary()])
   trackEvent('transaction_create')
+  if (submitted > 0) trackEvent('voice_used')
   toastMsg.value = submitted > 1 ? `已记录 ${submitted} 笔` : '记账成功'
   showToast.value = true
 }
