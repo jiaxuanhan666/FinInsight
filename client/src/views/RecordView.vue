@@ -149,7 +149,52 @@ const voiceSupported = ref(false)
 const isListening = ref(false)
 const voiceTranscript = ref('')
 const voiceParsing = ref(false)
-const voiceResult = ref<{ type: string; amount: number; categoryNote: string; paymentMethod: string; confidence: number; transcript: string } | null>(null)
+interface VoiceTx { type: string; amount: number; categoryNote: string; paymentMethod: string; confidence: number }
+const voiceResult = ref<{ transactions: VoiceTx[]; transcript: string } | null>(null)
+
+// Client-side regex parse (fallback when server AI unavailable)
+function clientSideParse(transcript: string): VoiceTx[] {
+  const parts = transcript.split(/[，,;；\s]+and\s+/i).filter(p => p.trim())
+  const results: VoiceTx[] = []
+  for (const part of parts) {
+    const tx: VoiceTx = { type: 'expense', amount: 0, categoryNote: '', paymentMethod: '', confidence: 0.35 }
+    // Type detection
+    if (/到账|工资|收入|赚了|分红|红包|退税|补贴|发了/.test(part)) tx.type = 'income'
+    // Amount extraction
+    const numMatch = part.match(/(\d+(?:\.\d+)?)/)
+    if (numMatch) tx.amount = parseFloat(numMatch[1])
+    // Category
+    const catMap: [RegExp, string][] = [
+      [/餐|饭|吃|面|咖啡|奶茶|外卖|火锅|食堂|餐厅|小吃|早点|夜宵/, '餐饮'],
+      [/打车|地铁|公交|出行|高铁|机票|火车|通勤|加油|停车/, '交通'],
+      [/买.*衣|买.*鞋|购|超市|商场|淘宝|京东|拼多多/, '购物'],
+      [/盲盒|手办|潮玩|乐高|模型|高达|积木/, '潮玩'],
+      [/手机|电脑|耳机|平板|相机|数码|switch|ps5|游戏机/, '数码'],
+      [/电影|KTV|游戏|剧本杀|密室|演出|门票|唱歌/, '娱乐'],
+      [/日用|纸巾|洗发|沐浴|牙膏|洗衣/, '日用'],
+      [/房租|水电|物业|燃气|暖气/, '房租'],
+      [/医院|药|挂号|体检|牙科|看病/, '医疗'],
+      [/课程|培训|书本|考试|学费/, '教育'],
+      [/衣服|裤子|鞋|包|帽子/, '购物'],
+      [/工资|薪水|月薪|年终奖/, '工资薪资'],
+      [/副业|兼职|接单|外包|freelance/, '副业收入'],
+      [/股票|分红|利息|基金|理财/, '投资收益'],
+      [/卖|变现|转卖|闲鱼|回血/, '资产变现'],
+      [/红包|礼金|随份子|压岁钱/, '红包礼金'],
+      [/退税|补贴|报销/, '退税补贴'],
+    ]
+    for (const [re, cat] of catMap) {
+      if (re.test(part)) { tx.categoryNote = cat; tx.confidence = 0.6; break }
+    }
+    // Payment
+    if (/微信/.test(part)) tx.paymentMethod = '微信'
+    else if (/支付宝/.test(part)) tx.paymentMethod = '支付宝'
+    else if (/刷卡|信用卡|银行卡/.test(part)) tx.paymentMethod = '银行卡'
+    else if (/现金/.test(part)) tx.paymentMethod = '现金'
+    results.push(tx)
+  }
+  return results.length > 0 ? results : [{ type: 'expense', amount: 0, categoryNote: '', paymentMethod: '', confidence: 0.2 }]
+}
 
 function startVoice() {
   const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
@@ -172,14 +217,15 @@ function startVoice() {
       try {
         const res = await api.post('/ai/parse-voice', { transcript: voiceTranscript.value.trim() })
         if (res.fallback) {
-          form.value.note = res.transcript
-          toastMsg.value = 'AI 暂不可用，语音已填入备注栏，请手动输入'; showToast.value = true
+          // Server AI unavailable → client-side local parse
+          voiceResult.value = { transactions: clientSideParse(res.transcript || voiceTranscript.value), transcript: res.transcript || voiceTranscript.value }
+        } else if (res.transactions && res.transactions.length > 0) {
+          voiceResult.value = { transactions: res.transactions, transcript: res.transcript || voiceTranscript.value }
         } else {
-          voiceResult.value = res
+          voiceResult.value = { transactions: clientSideParse(voiceTranscript.value), transcript: voiceTranscript.value }
         }
       } catch {
-        form.value.note = voiceTranscript.value
-        toastMsg.value = '语音解析失败，已填入备注栏'; showToast.value = true
+        voiceResult.value = { transactions: clientSideParse(voiceTranscript.value), transcript: voiceTranscript.value }
       } finally { voiceParsing.value = false }
     }
   }
@@ -193,19 +239,30 @@ function startVoice() {
   isListening.value = true
 }
 
-function confirmVoiceResult() {
+async function confirmVoiceResult() {
   if (!voiceResult.value) return
-  const r = voiceResult.value
-  form.value.type = r.type === 'income' ? 'income' : 'expense'
-  form.value.amount = String(r.amount || '')
-  form.value.categoryNote = r.categoryNote || ''
-  if (r.paymentMethod) form.value.paymentMethod = r.paymentMethod
+  const txs = voiceResult.value.transactions
+  let submitted = 0
+  for (const tx of txs) {
+    if (tx.amount <= 0 || !tx.categoryNote) continue
+    try {
+      await txStore.createTransaction({
+        amount: tx.amount,
+        type: (tx.type === 'income' ? 'income' : 'expense') as 'income' | 'expense',
+        categoryNote: tx.categoryNote,
+        paymentMethod: tx.paymentMethod || '',
+      })
+      submitted++
+    } catch (err: any) {
+      toastMsg.value = err.message || '部分记账失败'; showToast.value = true
+    }
+  }
   voiceResult.value = null
   voiceTranscript.value = ''
-  // If amount is filled, auto-submit
-  if (parseFloat(form.value.amount) > 0 && form.value.categoryNote.trim()) {
-    submit()
-  }
+  await Promise.all([txStore.fetchTransactions('month'), txStore.fetchSummary()])
+  trackEvent('transaction_create')
+  toastMsg.value = submitted > 1 ? `已记录 ${submitted} 笔` : '记账成功'
+  showToast.value = true
 }
 
 function dismissVoiceResult() {
@@ -308,35 +365,30 @@ onMounted(async () => {
         {{ submitting ? '提交中...' : '记录' }}
       </button>
 
-      <!-- Voice Confirmation Card -->
+      <!-- Voice Confirmation Card (batch) -->
       <div v-if="voiceResult" class="voice-confirm">
         <div class="vc-transcript"><span class="geo-icon sm glow-purple" style="display:inline-flex;vertical-align:middle;margin-right:6px;">&#9679;</span>"{{ voiceResult.transcript }}"</div>
-        <div v-if="voiceResult.confidence < 0.85" class="vc-warning">&#9650; AI 不太确定，请检查</div>
-        <div class="vc-fields">
-          <div class="vc-field">
-            <label class="vc-label">类型</label>
-            <select v-model="voiceResult.type" class="vc-input">
-              <option value="expense">支出</option>
-              <option value="income">收入</option>
-            </select>
-          </div>
-          <div class="vc-field">
-            <label class="vc-label">金额</label>
-            <input v-model.number="voiceResult.amount" type="number" step="0.01" class="vc-input" />
-          </div>
-          <div class="vc-field">
-            <label class="vc-label">品类</label>
-            <input v-model="voiceResult.categoryNote" type="text" class="vc-input" />
-          </div>
-          <div class="vc-field">
-            <label class="vc-label">支付</label>
-            <input v-model="voiceResult.paymentMethod" type="text" class="vc-input" placeholder="选填" />
-          </div>
+        <div v-if="voiceResult.transactions.length > 1" class="vc-count">&#9672; 识别到 {{ voiceResult.transactions.length }} 笔交易</div>
+
+        <div v-for="(tx, i) in voiceResult.transactions" :key="i" class="vc-row">
+          <span class="vc-idx">{{ i + 1 }}</span>
+          <select v-model="tx.type" class="vc-inline vc-type">
+            <option value="expense">支出</option>
+            <option value="income">收入</option>
+          </select>
+          <span class="vc-curr">CNY</span>
+          <input v-model.number="tx.amount" type="number" step="0.01" class="vc-inline vc-amt" placeholder="0" />
+          <input v-model="tx.categoryNote" type="text" class="vc-inline vc-cat" placeholder="品类" />
+          <input v-model="tx.paymentMethod" type="text" class="vc-inline vc-pay" placeholder="支付" />
+          <span v-if="tx.confidence < 0.6" class="vc-low" title="AI 置信度低">&#9650;</span>
         </div>
+
         <div class="vc-actions">
           <button class="btn-glass" @click="dismissVoiceResult">&#8592; 手动输入</button>
           <button class="btn-glass" style="color:var(--text-muted);" @click="voiceResult = null; voiceTranscript = ''; startVoice()">&#8635; 重新说</button>
-          <button class="btn-glass primary" @click="confirmVoiceResult">&#10003; 确认记账</button>
+          <button class="btn-glass primary" @click="confirmVoiceResult">
+            &#10003; {{ voiceResult.transactions.length > 1 ? `全部确认 (${voiceResult.transactions.length}笔)` : '确认记账' }}
+          </button>
         </div>
       </div>
     </Card>
@@ -545,12 +597,18 @@ onMounted(async () => {
 }
 .vc-transcript { font-size: var(--fs-sm); color: var(--text-secondary); margin-bottom: 4px; }
 .vc-warning { font-size: var(--fs-xs); color: var(--neon-amber); background: rgba(251,191,36,0.08); padding: 4px 10px; border-radius: var(--radius-full); display: inline-block; margin-top: 4px; }
-.vc-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
-.vc-field { display: flex; flex-direction: column; gap: 4px; }
-.vc-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.vc-input { padding: 8px 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-size: var(--fs-sm); outline: none; width: 100%; }
-.vc-input:focus { border-color: var(--border-active); }
-.vc-input option { background: var(--bg-elevated); color: var(--text-primary); }
+.vc-count { font-size: var(--fs-xs); color: var(--neon-purple); margin-top: 4px; }
+.vc-row { display: flex; align-items: center; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--border-subtle); }
+.vc-row:last-child { border-bottom: none; }
+.vc-idx { width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: var(--text-muted); background: rgba(255,255,255,0.04); border-radius: 4px; flex-shrink: 0; }
+.vc-inline { padding: 6px 8px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-size: var(--fs-xs); outline: none; min-width: 0; }
+.vc-inline:focus { border-color: var(--border-active); }
+.vc-type { width: 56px; flex-shrink: 0; appearance: none; }
+.vc-curr { font-size: 10px; color: var(--text-muted); flex-shrink: 0; }
+.vc-amt { width: 72px; text-align: right; font-family: var(--font-display); font-weight: 600; }
+.vc-cat { flex: 1; min-width: 64px; }
+.vc-pay { width: 56px; }
+.vc-low { color: var(--neon-amber); font-size: 12px; flex-shrink: 0; cursor: help; }
 .vc-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; flex-wrap: wrap; }
 .vc-actions .btn-glass { padding: 8px 16px; font-size: var(--fs-xs); }
 </style>
