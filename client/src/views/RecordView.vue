@@ -154,7 +154,18 @@ const voiceResult = ref<{ transactions: VoiceTx[]; transcript: string } | null>(
 
 // Client-side regex parse (fallback when server AI unavailable)
 function clientSideParse(transcript: string): VoiceTx[] {
-  const parts = transcript.split(/[，,;；\s]+and\s+/i).filter(p => p.trim())
+  // Verb-boundary split for delimiter-free multi-action sentences
+  // "吃饭花了200坐地铁花了10" → "吃饭花了200，坐地铁花了10"
+  let text = transcript
+  if (!/[，,;；]/.test(text)) {
+    text = text.replace(/(花了|用了|付了|买了|给了)(\d+(?:\.\d+)?(?:块|元)?)/g, '$1$2，')
+    // Clean up trailing comma
+    text = text.replace(/，$/, '')
+  }
+  // Also split on "然后"/"还有"/"接着"
+  text = text.replace(/然后|还有|接着/g, '，')
+
+  const parts = text.split(/[，,;；]+/).filter(p => p.trim())
   const results: VoiceTx[] = []
   for (const part of parts) {
     const tx: VoiceTx = { type: 'expense', amount: 0, categoryNote: '', paymentMethod: '', confidence: 0.35 }
@@ -165,8 +176,8 @@ function clientSideParse(transcript: string): VoiceTx[] {
     if (numMatch) tx.amount = parseFloat(numMatch[1])
     // Category
     const catMap: [RegExp, string][] = [
-      [/餐|饭|吃|面|咖啡|奶茶|外卖|火锅|食堂|餐厅|小吃|早点|夜宵/, '餐饮'],
-      [/打车|地铁|公交|出行|高铁|机票|火车|通勤|加油|停车/, '交通'],
+      [/餐|饭|吃|面|咖啡|奶茶|外卖|火锅|食堂|餐厅|小吃|早点|夜宵|馆子/, '餐饮'],
+      [/打车|地铁|公交|出行|高铁|机票|火车|通勤|加油|停车|坐地铁|坐公交/, '交通'],
       [/买.*衣|买.*鞋|购|超市|商场|淘宝|京东|拼多多/, '购物'],
       [/盲盒|手办|潮玩|乐高|模型|高达|积木/, '潮玩'],
       [/手机|电脑|耳机|平板|相机|数码|switch|ps5|游戏机/, '数码'],
@@ -182,9 +193,22 @@ function clientSideParse(transcript: string): VoiceTx[] {
       [/卖|变现|转卖|闲鱼|回血/, '资产变现'],
       [/红包|礼金|随份子|压岁钱/, '红包礼金'],
       [/退税|补贴|报销/, '退税补贴'],
+      [/快递|寄件|邮寄|顺丰|EMS|中通|圆通|申通|韵达|寄送/, '日用'],
+      [/宠物|猫粮|狗粮|猫砂|狗狗|猫咪|主子/, '宠物'],
+      [/理发|剪发|烫发|染发|美甲|美发|造型/, '美容'],
+      [/维修|修理|修手机|修电脑|修车/, '维修'],
+      [/话费|宽带|网费|流量|充值/, '日用'],
+      [/健身|游泳|瑜伽|跑步|运动/, '运动'],
+      [/花|绿植|盆栽|鲜花/, '日用'],
     ]
+    let matched = false
     for (const [re, cat] of catMap) {
-      if (re.test(part)) { tx.categoryNote = cat; tx.confidence = 0.6; break }
+      if (re.test(part)) { tx.categoryNote = cat; tx.confidence = 0.6; matched = true; break }
+    }
+    // Fallback: extract key noun/verb as raw category
+    if (!matched) {
+      const rawMatch = part.match(/(?:寄|交|买|修|理|做|给|送)(.{1,4})/)
+      if (rawMatch) { tx.categoryNote = rawMatch[0]; tx.confidence = 0.25 }
     }
     // Payment
     if (/微信/.test(part)) tx.paymentMethod = '微信'
