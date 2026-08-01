@@ -16,28 +16,42 @@ const toastMsg = ref('')
 const showToast = ref(false)
 const historyFilter = ref<'all' | 'expense' | 'income'>('all')
 
-// ---- Custom Categories ----
-const CUSTOM_CAT_KEY = 'fininsight_custom_categories'
-const defaultCategories = ['餐饮', '交通', '购物', '潮玩', '数码', '娱乐', '日用', '房租', '副业', '薪资']
+// ---- Category System: Dual-track (expense vs income) ----
+const EXPENSE_CAT_KEY = 'fininsight_custom_expense_categories'
+const INCOME_CAT_KEY = 'fininsight_custom_income_categories'
+
+const defaultExpenseCategories = ['餐饮', '交通', '购物', '潮玩', '数码', '娱乐', '日用', '房租', '医疗', '教育', '服饰', '宠物']
+const defaultIncomeCategories  = ['工资薪资', '副业收入', '投资收益', '资产变现', '红包礼金', '退税补贴', '兼职自由职业', '其他收入']
 const MAX_CUSTOM = 20
 
-const customCategories = ref<string[]>([])
+const customExpenseCategories = ref<string[]>([])
+const customIncomeCategories  = ref<string[]>([])
 
-function loadCustomCategories() {
+function loadCat(key: string): string[] {
   try {
-    const raw = localStorage.getItem(CUSTOM_CAT_KEY)
+    const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) customCategories.value = parsed.filter(c => typeof c === 'string' && c.trim())
+      if (Array.isArray(parsed)) return parsed.filter((c: any) => typeof c === 'string' && c.trim())
     }
-  } catch { customCategories.value = [] }
+  } catch {}
+  return []
+}
+function saveCat(key: string, list: string[]) { localStorage.setItem(key, JSON.stringify(list)) }
+
+function loadCustomCategories() {
+  customExpenseCategories.value = loadCat(EXPENSE_CAT_KEY)
+  customIncomeCategories.value  = loadCat(INCOME_CAT_KEY)
 }
 
-function saveCustomCategories() {
-  localStorage.setItem(CUSTOM_CAT_KEY, JSON.stringify(customCategories.value))
-}
-
-const allCategories = computed(() => [...defaultCategories, ...customCategories.value])
+// Current visible categories based on transaction type
+const currentDefaultCategories = computed(() =>
+  form.value.type === 'expense' ? defaultExpenseCategories : defaultIncomeCategories
+)
+const currentCustomCategories = computed(() =>
+  form.value.type === 'expense' ? customExpenseCategories.value : customIncomeCategories.value
+)
+const currentAllCategories = computed(() => [...currentDefaultCategories.value, ...currentCustomCategories.value])
 
 const showAddCat = ref(false)
 const newCatName = ref('')
@@ -45,18 +59,20 @@ const newCatName = ref('')
 function addCustomCategory() {
   const name = newCatName.value.trim()
   if (!name) { toastMsg.value = '请输入品类名称'; showToast.value = true; return }
-  if (allCategories.value.includes(name)) { toastMsg.value = '该品类已存在'; showToast.value = true; return }
-  if (customCategories.value.length >= MAX_CUSTOM) { toastMsg.value = `最多添加 ${MAX_CUSTOM} 个自定义品类`; showToast.value = true; return }
-  customCategories.value.push(name)
-  saveCustomCategories()
+  if (currentAllCategories.value.includes(name)) { toastMsg.value = '该品类已存在'; showToast.value = true; return }
+  const target = form.value.type === 'expense' ? customExpenseCategories : customIncomeCategories
+  if (target.value.length >= MAX_CUSTOM) { toastMsg.value = `最多添加 ${MAX_CUSTOM} 个自定义品类`; showToast.value = true; return }
+  target.value.push(name)
+  saveCat(form.value.type === 'expense' ? EXPENSE_CAT_KEY : INCOME_CAT_KEY, target.value)
   form.value.categoryNote = name
   newCatName.value = ''
   showAddCat.value = false
 }
 
 function removeCustomCategory(name: string) {
-  customCategories.value = customCategories.value.filter(c => c !== name)
-  saveCustomCategories()
+  const target = form.value.type === 'expense' ? customExpenseCategories : customIncomeCategories
+  target.value = target.value.filter(c => c !== name)
+  saveCat(form.value.type === 'expense' ? EXPENSE_CAT_KEY : INCOME_CAT_KEY, target.value)
   if (form.value.categoryNote === name) form.value.categoryNote = ''
 }
 
@@ -143,11 +159,11 @@ onMounted(async () => {
 
     <Card style="margin-bottom: var(--space-lg);">
       <div class="type-row">
-        <button :class="['type-btn', { active: form.type === 'expense' }]" @click="form.type = 'expense'">
+        <button :class="['type-btn', { active: form.type === 'expense' }]" @click="form.type = 'expense'; form.categoryNote = ''">
           <span class="geo-icon sm" :class="form.type === 'expense' ? 'glow-pink' : ''">&#9660;</span>
           <span>支出</span>
         </button>
-        <button :class="['type-btn', { active: form.type === 'income' }]" @click="form.type = 'income'">
+        <button :class="['type-btn', { active: form.type === 'income' }]" @click="form.type = 'income'; form.categoryNote = ''">
           <span class="geo-icon sm" :class="form.type === 'income' ? 'glow-mint' : ''">&#9650;</span>
           <span>收入</span>
         </button>
@@ -164,14 +180,14 @@ onMounted(async () => {
       <!-- Category Chips -->
       <div class="chip-row mt-md">
         <button
-          v-for="cat in allCategories"
+          v-for="cat in currentAllCategories"
           :key="cat"
-          :class="['chip', { active: form.categoryNote === cat, custom: customCategories.includes(cat) }]"
+          :class="['chip', { active: form.categoryNote === cat, custom: currentCustomCategories.includes(cat) }]"
           @click="form.categoryNote = cat"
         >
           <span>{{ cat }}</span>
           <span
-            v-if="customCategories.includes(cat)"
+            v-if="currentCustomCategories.includes(cat)"
             class="chip-del"
             @click.stop="removeCustomCategory(cat)"
             title="删除此品类"

@@ -15,7 +15,7 @@ const app = new Hono();
 
 // CORS
 app.use('*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'https://jiaxuanhan666.github.io'],
+  origin: (origin) => origin || '*',
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'X-User-UUID'],
   exposeHeaders: ['Content-Type'],
