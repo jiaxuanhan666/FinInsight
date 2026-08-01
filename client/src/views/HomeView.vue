@@ -34,6 +34,56 @@ const savingsAlertLevel = computed(() => {
   return 'danger'
 })
 
+// ---- Monthly Repayment Tracker ----
+function getRepayKey(liabilityId: string): string {
+  const now = new Date()
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  return `fininsight_repay_${ym}_${liabilityId}`
+}
+
+const monthlyLiabilities = computed(() =>
+  assetStore.liabilities.filter(l => l.monthlyPayment > 0)
+)
+
+const repayStatus = ref<Record<string, boolean>>({})
+
+function loadRepayStatus() {
+  const status: Record<string, boolean> = {}
+  for (const l of monthlyLiabilities.value) {
+    status[l.id] = localStorage.getItem(getRepayKey(l.id)) === '1'
+  }
+  repayStatus.value = status
+}
+
+function toggleRepay(liabilityId: string) {
+  const key = getRepayKey(liabilityId)
+  const current = repayStatus.value[liabilityId]
+  if (current) {
+    localStorage.removeItem(key)
+    repayStatus.value[liabilityId] = false
+  } else {
+    localStorage.setItem(key, '1')
+    repayStatus.value[liabilityId] = true
+  }
+}
+
+const repaidCount = computed(() =>
+  Object.values(repayStatus.value).filter(Boolean).length
+)
+const totalMonthlyRepay = computed(() =>
+  monthlyLiabilities.value.reduce((s, l) => s + l.monthlyPayment, 0)
+)
+const repayProgress = computed(() =>
+  monthlyLiabilities.value.length > 0
+    ? Math.round((repaidCount.value / monthlyLiabilities.value.length) * 100)
+    : 0
+)
+
+const liabilityTypeLabels: Record<string, string> = {
+  credit_card: '信用卡', installment: '消费分期', mortgage: '房贷',
+  car_loan: '车贷', personal_loan: '个人借贷', other: '其他负债',
+}
+
 // Chart data derived from real transactions
 const periodMap: Record<string, number> = { week: 7*86400000, month: 30*86400000, year: 365*86400000 }
 
@@ -85,8 +135,6 @@ const assetPieData = computed(() => {
 
 const activeGoals = computed(() => savingsStore.goals.filter(g => g.status === 'active'))
 
-const periodLabel = computed(() => ({ week: '本周', month: '本月', year: '年度' }[period.value]))
-
 onMounted(async () => {
   await Promise.all([
     txStore.fetchSummary(),
@@ -95,6 +143,7 @@ onMounted(async () => {
     assetStore.fetchLiabilities(),
     savingsStore.fetchGoals(),
   ])
+  loadRepayStatus()
   loading.value = false
   trackEvent('page_view')
 })
@@ -102,15 +151,16 @@ onMounted(async () => {
 
 <template>
   <div class="page">
-    <!-- Header -->
+    <!-- Header: "我的" button left, FinInsight + date right -->
     <div class="page-header">
-      <div>
+      <button class="my-btn" @click="router.push('/settings')" aria-label="个人中心">
+        <span class="my-avatar">&#9679;</span>
+        <span class="my-label">我的</span>
+      </button>
+      <div class="header-right">
         <div class="header-label">FinInsight</div>
         <div class="header-date">{{ new Date().toLocaleDateString('zh-CN', { month:'long', day:'numeric' }) }}</div>
       </div>
-      <button class="avatar-btn" @click="router.push('/settings')" aria-label="个人中心">
-        <span class="avatar-glyph">&#9679;</span>
-      </button>
     </div>
 
     <!-- Hero Card: Net Worth -->
@@ -129,7 +179,6 @@ onMounted(async () => {
         </span>
       </div>
     </Card>
-
 
     <!-- Bento Grid: 4 Stats -->
     <div class="bento-4">
@@ -165,6 +214,38 @@ onMounted(async () => {
         <span class="quick-label">定目标</span>
       </button>
     </div>
+
+    <!-- Monthly Repayment Tracker -->
+    <Card v-if="monthlyLiabilities.length > 0" glow="coral" style="margin-bottom: var(--space-md); padding: 16px;">
+      <div class="repay-header">
+        <span class="repay-title">&#9661; 月度还款</span>
+        <span class="repay-month">本月</span>
+      </div>
+      <div class="repay-list">
+        <button
+          v-for="liab in monthlyLiabilities"
+          :key="liab.id"
+          class="repay-item"
+          :class="{ 'repay-done': repayStatus[liab.id] }"
+          @click="toggleRepay(liab.id)"
+        >
+          <span class="repay-check" :class="{ checked: repayStatus[liab.id] }">
+            <span v-if="repayStatus[liab.id]">&#10003;</span>
+          </span>
+          <div class="repay-info">
+            <span class="repay-name">{{ liab.name }}</span>
+            <span class="repay-type">{{ liabilityTypeLabels[liab.type] || liab.type }}</span>
+          </div>
+          <span class="repay-amount" :class="{ done: repayStatus[liab.id] }">{{ liab.monthlyPayment.toLocaleString() }}</span>
+        </button>
+      </div>
+      <div class="repay-footer">
+        <div class="repay-track">
+          <div class="repay-track-fill" :style="{ width: repayProgress + '%' }"></div>
+        </div>
+        <span class="repay-summary">已还 {{ repaidCount }}/{{ monthlyLiabilities.length }} 项 · 合计 {{ totalMonthlyRepay.toLocaleString() }}/月</span>
+      </div>
+    </Card>
 
     <!-- AI Insights (interactive) -->
     <Card v-if="txStore.transactions.length > 0" glow="purple" style="margin-bottom: var(--space-md); padding: 16px;" :stagger="3">
@@ -253,32 +334,45 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Header */
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; }
+.header-right { text-align: right; }
 .header-label { font-size: var(--fs-xs); color: var(--text-muted); letter-spacing: 0.1em; text-transform: uppercase; }
 .header-date { font-family: var(--font-display); font-size: var(--fs-xl); font-weight: 600; margin-top: 2px; }
 
-.avatar-btn {
-  width: 40px; height: 40px;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(167, 139, 250, 0.1);
-  border: 1px solid rgba(167, 139, 250, 0.2);
+/* "我的" button — left side of header */
+.my-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px 6px 6px;
+  background: rgba(167, 139, 250, 0.08);
+  border: 1px solid rgba(167, 139, 250, 0.18);
   border-radius: var(--radius-full);
   cursor: pointer;
   transition: all var(--dur-normal) var(--ease-spring);
   flex-shrink: 0;
 }
-.avatar-btn:hover {
-  background: rgba(167, 139, 250, 0.18);
-  border-color: rgba(167, 139, 250, 0.4);
-  box-shadow: 0 0 16px rgba(167, 139, 250, 0.25);
-  transform: scale(1.05);
+.my-btn:hover {
+  background: rgba(167, 139, 250, 0.15);
+  border-color: rgba(167, 139, 250, 0.35);
+  box-shadow: 0 0 16px rgba(167, 139, 250, 0.2);
+  transform: scale(1.03);
 }
-.avatar-btn:active { transform: scale(0.93); }
-.avatar-glyph {
-  font-size: 22px;
+.my-btn:active { transform: scale(0.95); }
+.my-avatar {
+  width: 34px; height: 34px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(167, 139, 250, 0.15);
+  border-radius: 50%;
+  font-size: 18px;
   color: var(--neon-purple);
   filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.4));
-  line-height: 1;
+}
+.my-label {
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--neon-purple);
+  letter-spacing: 0.04em;
 }
 
 .hero-label { font-size: var(--fs-xs); color: var(--text-secondary); letter-spacing: 0.08em; margin-bottom: 4px; }
@@ -308,6 +402,47 @@ onMounted(async () => {
 .quick-btn:hover { border-color: var(--border-active); background: rgba(255,255,255,0.05); transform: translateY(-1px); }
 .quick-btn:active { transform: scale(0.96); }
 .quick-label { font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 600; color: var(--text-secondary); }
+
+/* Monthly Repayment Card */
+.repay-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.repay-title { font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 600; color: var(--neon-coral); }
+.repay-month { font-size: 10px; color: var(--text-muted); background: rgba(255,255,255,0.04); padding: 2px 10px; border-radius: var(--radius-full); }
+.repay-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.repay-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-smooth);
+  text-align: left;
+  width: 100%;
+}
+.repay-item:hover { background: rgba(255,255,255,0.03); }
+.repay-item.repay-done { opacity: 0.5; }
+.repay-check {
+  width: 22px; height: 22px;
+  border: 2px solid rgba(251, 113, 133, 0.3);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--neon-mint);
+  flex-shrink: 0;
+  transition: all var(--dur-fast) var(--ease-smooth);
+}
+.repay-check.checked {
+  border-color: var(--neon-mint);
+  background: rgba(52, 211, 153, 0.15);
+}
+.repay-info { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.repay-name { font-size: var(--fs-sm); font-weight: 500; color: var(--text-primary); }
+.repay-type { font-size: 10px; color: var(--text-muted); }
+.repay-amount { font-family: var(--font-display); font-size: var(--fs-sm); font-weight: 700; color: var(--neon-coral); }
+.repay-amount.done { color: var(--neon-mint); text-decoration: line-through; }
+.repay-footer { display: flex; flex-direction: column; gap: 6px; }
+.repay-track { height: 4px; background: rgba(255,255,255,0.06); border-radius: var(--radius-full); overflow: hidden; }
+.repay-track-fill { height: 100%; background: var(--neon-mint); border-radius: var(--radius-full); transition: width 0.4s var(--ease-spring); box-shadow: 0 0 6px rgba(52,211,153,0.3); }
+.repay-summary { font-size: 10px; color: var(--text-muted); text-align: center; }
 
 .section-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .section-title { font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; }

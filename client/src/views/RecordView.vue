@@ -9,12 +9,56 @@ import Toast from '../components/ui/Toast.vue'
 
 const router = useRouter()
 const txStore = useTransactionStore()
-const form = ref({ amount: '', type: 'expense' as const, categoryNote: '', note: '', paymentMethod: '' })
+const form = ref<{ amount: string; type: 'expense' | 'income'; categoryNote: string; note: string; paymentMethod: string }>({ amount: '', type: 'expense', categoryNote: '', note: '', paymentMethod: '' })
 const payMethods = ['银行卡', '微信', '支付宝', '现金', '其他']
 const submitting = ref(false)
 const toastMsg = ref('')
 const showToast = ref(false)
 const historyFilter = ref<'all' | 'expense' | 'income'>('all')
+
+// ---- Custom Categories ----
+const CUSTOM_CAT_KEY = 'fininsight_custom_categories'
+const defaultCategories = ['餐饮', '交通', '购物', '潮玩', '数码', '娱乐', '日用', '房租', '副业', '薪资']
+const MAX_CUSTOM = 20
+
+const customCategories = ref<string[]>([])
+
+function loadCustomCategories() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_CAT_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) customCategories.value = parsed.filter(c => typeof c === 'string' && c.trim())
+    }
+  } catch { customCategories.value = [] }
+}
+
+function saveCustomCategories() {
+  localStorage.setItem(CUSTOM_CAT_KEY, JSON.stringify(customCategories.value))
+}
+
+const allCategories = computed(() => [...defaultCategories, ...customCategories.value])
+
+const showAddCat = ref(false)
+const newCatName = ref('')
+
+function addCustomCategory() {
+  const name = newCatName.value.trim()
+  if (!name) { toastMsg.value = '请输入品类名称'; showToast.value = true; return }
+  if (allCategories.value.includes(name)) { toastMsg.value = '该品类已存在'; showToast.value = true; return }
+  if (customCategories.value.length >= MAX_CUSTOM) { toastMsg.value = `最多添加 ${MAX_CUSTOM} 个自定义品类`; showToast.value = true; return }
+  customCategories.value.push(name)
+  saveCustomCategories()
+  form.value.categoryNote = name
+  newCatName.value = ''
+  showAddCat.value = false
+}
+
+function removeCustomCategory(name: string) {
+  customCategories.value = customCategories.value.filter(c => c !== name)
+  saveCustomCategories()
+  if (form.value.categoryNote === name) form.value.categoryNote = ''
+}
 
 // Confirmation dialog
 const showConfirm = ref(false)
@@ -40,8 +84,6 @@ const groupedRecent = computed(() => {
   })
   return Object.entries(groups)
 })
-
-const quickCategories = ['餐饮', '交通', '购物', '潮玩', '数码', '娱乐', '日用', '房租', '副业', '薪资']
 
 async function submit() {
   const amount = parseFloat(form.value.amount)
@@ -86,7 +128,10 @@ async function confirmCategory(asAsset: boolean) {
   showConfirm.value = false
 }
 
-onMounted(async () => { await txStore.fetchTransactions('month') })
+onMounted(async () => {
+  await txStore.fetchTransactions('month')
+  loadCustomCategories()
+})
 </script>
 
 <template>
@@ -116,9 +161,40 @@ onMounted(async () => { await txStore.fetchTransactions('month') })
       <div class="mt-md"><input v-model="form.categoryNote" type="text" class="glass-input" placeholder="品类备注" maxlength="100" /></div>
       <div class="mt-sm"><input v-model="form.note" type="text" class="glass-input" placeholder="添加备注（选填）" maxlength="200" /></div>
 
+      <!-- Category Chips -->
       <div class="chip-row mt-md">
-        <button v-for="cat in quickCategories" :key="cat" class="chip" @click="form.categoryNote = cat">{{ cat }}</button>
+        <button
+          v-for="cat in allCategories"
+          :key="cat"
+          :class="['chip', { active: form.categoryNote === cat, custom: customCategories.includes(cat) }]"
+          @click="form.categoryNote = cat"
+        >
+          <span>{{ cat }}</span>
+          <span
+            v-if="customCategories.includes(cat)"
+            class="chip-del"
+            @click.stop="removeCustomCategory(cat)"
+            title="删除此品类"
+          >&#10005;</span>
+        </button>
+        <!-- Add custom button -->
+        <button v-if="!showAddCat" class="chip chip-add" @click="showAddCat = true">+ 自定义</button>
       </div>
+
+      <!-- Add custom category input -->
+      <div v-if="showAddCat" class="add-cat-row mt-sm">
+        <input
+          v-model="newCatName"
+          class="glass-input"
+          placeholder="输入新品类名称"
+          maxlength="20"
+          @keyup.enter="addCustomCategory"
+        />
+        <button class="chip chip-confirm" @click="addCustomCategory">添加</button>
+        <button class="chip chip-cancel" @click="showAddCat = false; newCatName = ''">取消</button>
+      </div>
+
+      <!-- Payment method -->
       <div class="pay-row mt-sm">
         <span class="pay-label">支付</span>
         <button v-for="pm in payMethods" :key="pm" :class="['chip',{active:form.paymentMethod===pm}]" @click="form.paymentMethod = form.paymentMethod===pm ? '' : pm">{{ pm }}</button>
@@ -182,9 +258,6 @@ onMounted(async () => { await txStore.fetchTransactions('month') })
 <style scoped>
 .section-head { display: flex; justify-content: space-between; align-items: center; }
 .section-title { font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; }
-.period-tabs { display: flex; gap: 4px; background: rgba(255,255,255,0.04); border-radius: var(--radius-full); padding: 2px; }
-.period-tab { padding: 4px 14px; border: none; border-radius: var(--radius-full); background: transparent; color: var(--text-muted); font-size: var(--fs-xs); font-weight: 500; cursor: pointer; transition: all var(--dur-fast) var(--ease-smooth); }
-.period-tab.active { background: rgba(167,139,250,0.2); color: var(--neon-purple); }
 
 .type-row { display: flex; gap: var(--space-sm); margin-bottom: var(--space-lg); }
 .type-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 12px; border: 1px solid var(--border-default); border-radius: var(--radius-full); background: transparent; color: var(--text-secondary); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; cursor: pointer; transition: all var(--dur-fast) var(--ease-smooth); }
@@ -195,10 +268,67 @@ onMounted(async () => { await txStore.fetchTransactions('month') })
 .amount-input { font-family: var(--font-display); font-size: var(--fs-3xl); font-weight: 800; text-align: center; border: none; background: transparent; color: var(--text-primary); width: 200px; padding: 0; outline: none; letter-spacing: -0.02em; }
 .amount-input::placeholder { color: rgba(255,255,255,0.1); }
 
+/* Category chips */
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { padding: 6px 14px; border: 1px solid var(--border-subtle); border-radius: var(--radius-full); background: rgba(255,255,255,0.02); color: var(--text-secondary); font-size: var(--fs-xs); cursor: pointer; transition: all var(--dur-fast) var(--ease-smooth); }
+.chip {
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: rgba(255,255,255,0.02);
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  transition: all var(--dur-fast) var(--ease-smooth);
+}
 .chip:hover { border-color: var(--border-active); color: var(--neon-purple); }
 .chip.active { border-color: var(--neon-purple); background: rgba(167,139,250,0.1); color: var(--neon-purple); }
+
+/* Custom category chip — distinct style */
+.chip.custom {
+  border-color: rgba(167, 139, 250, 0.25);
+  background: rgba(167, 139, 250, 0.06);
+  color: var(--neon-purple);
+}
+.chip.custom:hover { background: rgba(167, 139, 250, 0.14); }
+.chip.custom.active { background: rgba(167, 139, 250, 0.2); border-color: var(--neon-purple); }
+
+.chip-del {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  background: rgba(251, 113, 133, 0.2);
+  color: var(--neon-coral);
+  font-size: 8px;
+  line-height: 1;
+  transition: all var(--dur-fast) var(--ease-smooth);
+}
+.chip-del:hover { background: rgba(251, 113, 133, 0.4); }
+
+.chip-add {
+  border-style: dashed;
+  border-color: rgba(167, 139, 250, 0.2);
+  color: var(--neon-purple);
+  background: transparent;
+}
+.chip-add:hover { border-color: rgba(167, 139, 250, 0.4); background: rgba(167, 139, 250, 0.05); }
+
+.chip-confirm {
+  border-color: rgba(52, 211, 153, 0.3);
+  background: rgba(52, 211, 153, 0.1);
+  color: var(--neon-mint);
+}
+.chip-confirm:hover { background: rgba(52, 211, 153, 0.18); }
+
+.chip-cancel {
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+/* Add custom row */
+.add-cat-row { display: flex; gap: 6px; align-items: center; }
+.add-cat-row .glass-input { flex: 1; margin: 0; }
+
 .pay-row { display: flex; align-items: center; gap: 6px; }
 .pay-label { font-size: var(--fs-xs); color: var(--text-muted); margin-right: 2px; }
 
