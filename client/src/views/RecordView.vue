@@ -144,9 +144,80 @@ async function confirmCategory(asAsset: boolean) {
   showConfirm.value = false
 }
 
+// ---- Voice Input ----
+const voiceSupported = ref(false)
+const isListening = ref(false)
+const voiceTranscript = ref('')
+const voiceParsing = ref(false)
+const voiceResult = ref<{ type: string; amount: number; categoryNote: string; paymentMethod: string; confidence: number; transcript: string } | null>(null)
+
+function startVoice() {
+  const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+  if (!SR) return
+  const recognition = new SR()
+  recognition.lang = 'zh-CN'
+  recognition.interimResults = true
+  recognition.maxAlternatives = 3
+  voiceTranscript.value = ''
+
+  recognition.onresult = (event: any) => {
+    voiceTranscript.value = Array.from(event.results)
+      .map((r: any) => r[0].transcript).join('')
+  }
+
+  recognition.onend = async () => {
+    isListening.value = false
+    if (voiceTranscript.value.trim()) {
+      voiceParsing.value = true
+      try {
+        const res = await api.post('/ai/parse-voice', { transcript: voiceTranscript.value.trim() })
+        if (res.fallback) {
+          form.value.note = res.transcript
+          toastMsg.value = 'AI 暂不可用，语音已填入备注栏，请手动输入'; showToast.value = true
+        } else {
+          voiceResult.value = res
+        }
+      } catch {
+        form.value.note = voiceTranscript.value
+        toastMsg.value = '语音解析失败，已填入备注栏'; showToast.value = true
+      } finally { voiceParsing.value = false }
+    }
+  }
+
+  recognition.onerror = () => {
+    isListening.value = false
+    toastMsg.value = '语音识别失败，请手动输入'; showToast.value = true
+  }
+
+  recognition.start()
+  isListening.value = true
+}
+
+function confirmVoiceResult() {
+  if (!voiceResult.value) return
+  const r = voiceResult.value
+  form.value.type = r.type === 'income' ? 'income' : 'expense'
+  form.value.amount = String(r.amount || '')
+  form.value.categoryNote = r.categoryNote || ''
+  if (r.paymentMethod) form.value.paymentMethod = r.paymentMethod
+  voiceResult.value = null
+  voiceTranscript.value = ''
+  // If amount is filled, auto-submit
+  if (parseFloat(form.value.amount) > 0 && form.value.categoryNote.trim()) {
+    submit()
+  }
+}
+
+function dismissVoiceResult() {
+  form.value.note = voiceResult.value?.transcript || voiceTranscript.value
+  voiceResult.value = null
+  voiceTranscript.value = ''
+}
+
 onMounted(async () => {
   await txStore.fetchTransactions('month')
   loadCustomCategories()
+  voiceSupported.value = !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
 })
 </script>
 
@@ -174,7 +245,24 @@ onMounted(async () => {
         <input v-model="form.amount" type="number" step="0.01" min="0" placeholder="0.00" class="amount-input" />
       </div>
 
-      <div class="mt-md"><input v-model="form.categoryNote" type="text" class="glass-input" placeholder="品类备注" maxlength="100" /></div>
+      <!-- Voice Input Button -->
+      <div v-if="voiceSupported && !voiceResult" class="voice-bar">
+        <button v-if="!isListening && !voiceParsing" class="voice-btn" @click="startVoice">
+          <span class="voice-icon">&#9679;</span>
+          <span>语音记账</span>
+        </button>
+        <div v-else-if="isListening" class="voice-listening">
+          <span class="voice-pulse"></span>
+          <span class="voice-text">{{ voiceTranscript || '正在聆听...' }}</span>
+          <button class="voice-stop" @click="isListening = false">停止</button>
+        </div>
+        <div v-else-if="voiceParsing" class="voice-parsing">
+          <span class="voice-spinner"></span>
+          <span>AI 正在理解...</span>
+        </div>
+      </div>
+
+      <div class="mt-md"><input v-model="form.categoryNote" type="text" class="glass-input" placeholder="品类备注" maxlength="100" :disabled="!!voiceResult" /></div>
       <div class="mt-sm"><input v-model="form.note" type="text" class="glass-input" placeholder="添加备注（选填）" maxlength="200" /></div>
 
       <!-- Category Chips -->
@@ -219,6 +307,38 @@ onMounted(async () => {
       <button class="btn-glass primary submit-btn mt-lg" :disabled="submitting" @click="submit">
         {{ submitting ? '提交中...' : '记录' }}
       </button>
+
+      <!-- Voice Confirmation Card -->
+      <div v-if="voiceResult" class="voice-confirm">
+        <div class="vc-transcript"><span class="geo-icon sm glow-purple" style="display:inline-flex;vertical-align:middle;margin-right:6px;">&#9679;</span>"{{ voiceResult.transcript }}"</div>
+        <div v-if="voiceResult.confidence < 0.85" class="vc-warning">&#9650; AI 不太确定，请检查</div>
+        <div class="vc-fields">
+          <div class="vc-field">
+            <label class="vc-label">类型</label>
+            <select v-model="voiceResult.type" class="vc-input">
+              <option value="expense">支出</option>
+              <option value="income">收入</option>
+            </select>
+          </div>
+          <div class="vc-field">
+            <label class="vc-label">金额</label>
+            <input v-model.number="voiceResult.amount" type="number" step="0.01" class="vc-input" />
+          </div>
+          <div class="vc-field">
+            <label class="vc-label">品类</label>
+            <input v-model="voiceResult.categoryNote" type="text" class="vc-input" />
+          </div>
+          <div class="vc-field">
+            <label class="vc-label">支付</label>
+            <input v-model="voiceResult.paymentMethod" type="text" class="vc-input" placeholder="选填" />
+          </div>
+        </div>
+        <div class="vc-actions">
+          <button class="btn-glass" @click="dismissVoiceResult">&#8592; 手动输入</button>
+          <button class="btn-glass" style="color:var(--text-muted);" @click="voiceResult = null; voiceTranscript = ''; startVoice()">&#8635; 重新说</button>
+          <button class="btn-glass primary" @click="confirmVoiceResult">&#10003; 确认记账</button>
+        </div>
+      </div>
     </Card>
 
     <!-- History -->
@@ -374,4 +494,63 @@ onMounted(async () => {
 .confirm-amount { font-family: var(--font-display); font-size: var(--fs-2xl); font-weight: 800; margin-bottom: 20px; }
 .confirm-btns { display: flex; gap: var(--space-sm); }
 .confirm-hint { font-size: 10px; color: var(--text-muted); margin-top: 12px; }
+
+/* Voice Input */
+.voice-bar { display: flex; justify-content: center; margin-bottom: var(--space-md); }
+.voice-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 28px;
+  border: 1px dashed rgba(167, 139, 250, 0.35);
+  border-radius: var(--radius-full);
+  background: rgba(167, 139, 250, 0.06);
+  color: var(--neon-purple);
+  font-family: var(--font-display);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--dur-normal) var(--ease-spring);
+}
+.voice-btn:hover { background: rgba(167, 139, 250, 0.12); border-color: rgba(167, 139, 250, 0.5); transform: scale(1.02); }
+.voice-icon { font-size: 20px; }
+
+.voice-listening {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 20px;
+  background: rgba(251, 113, 133, 0.08);
+  border: 1px solid rgba(251, 113, 133, 0.25);
+  border-radius: var(--radius-full);
+  width: 100%;
+}
+.voice-pulse { width: 12px; height: 12px; border-radius: 50%; background: var(--neon-coral); animation: glowPulse 1s infinite; flex-shrink: 0; }
+.voice-text { flex: 1; font-size: var(--fs-sm); color: var(--text-secondary); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.voice-stop { padding: 4px 12px; border: 1px solid var(--border-subtle); border-radius: var(--radius-full); background: transparent; color: var(--text-muted); font-size: var(--fs-xs); cursor: pointer; flex-shrink: 0; }
+
+.voice-parsing {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 12px 20px;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+.voice-spinner { width: 16px; height: 16px; border: 2px solid var(--border-subtle); border-top-color: var(--neon-purple); border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Voice confirmation card */
+.voice-confirm {
+  margin-top: var(--space-md);
+  padding: 16px;
+  background: rgba(167, 139, 250, 0.04);
+  border: 1px solid rgba(167, 139, 250, 0.2);
+  border-radius: var(--radius-lg);
+  animation: pageIn 0.3s var(--ease-spring) both;
+}
+.vc-transcript { font-size: var(--fs-sm); color: var(--text-secondary); margin-bottom: 4px; }
+.vc-warning { font-size: var(--fs-xs); color: var(--neon-amber); background: rgba(251,191,36,0.08); padding: 4px 10px; border-radius: var(--radius-full); display: inline-block; margin-top: 4px; }
+.vc-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+.vc-field { display: flex; flex-direction: column; gap: 4px; }
+.vc-label { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.vc-input { padding: 8px 10px; background: rgba(255,255,255,0.04); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); color: var(--text-primary); font-size: var(--fs-sm); outline: none; width: 100%; }
+.vc-input:focus { border-color: var(--border-active); }
+.vc-input option { background: var(--bg-elevated); color: var(--text-primary); }
+.vc-actions { display: flex; gap: 8px; margin-top: 14px; justify-content: flex-end; flex-wrap: wrap; }
+.vc-actions .btn-glass { padding: 8px 16px; font-size: var(--fs-xs); }
 </style>

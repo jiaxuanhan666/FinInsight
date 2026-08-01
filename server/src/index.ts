@@ -10,6 +10,7 @@ import { savingsRoute } from './routes/savings';
 import { reportRoute } from './routes/report';
 import { analyticsRoute } from './routes/analytics';
 import { exchangeRoute } from './routes/exchangeRate';
+import { voiceRoute } from './routes/voice';
 
 const app = new Hono();
 
@@ -30,6 +31,7 @@ app.route('/api/user', userRoute);
 // analytics /track is public (sendBeacon), /dashboard requires auth
 app.route('/api/analytics', analyticsRoute);
 app.route('/api/exchange', exchangeRoute);
+app.route('/api/ai', voiceRoute);
 
 // 需要认证的路由
 app.use('/api/transaction/*', authMiddleware);
