@@ -119,21 +119,23 @@ async function saveAsset() {
 
   const subType = selectedCat.value ? `${selectedCat.value.label} > ${selectedSub.value || selectedCat.value.subs[0]}` : ''
 
-  if (editingId.value) {
-    await assetStore.updateAsset(editingId.value, {
-      name: assetName.value.trim(), subType,
-      currentValue: val, costBasis: parseFloat(assetCost.value) || val,
-    })
-    toastMsg.value = '资产已更新'
-  } else {
-    if (!selectedCat.value) { toastMsg.value = '请选择资产分类'; showToast.value = true; return }
-    await assetStore.createAsset({
-      name: assetName.value.trim(), type: assetType.value, subType,
-      currentValue: val, costBasis: parseFloat(assetCost.value) || val,
-    })
-    toastMsg.value = '资产添加成功'
-  }
-  showModal.value = false; showToast.value = true; trackEvent('asset_edit')
+  try {
+    if (editingId.value) {
+      await assetStore.updateAsset(editingId.value, {
+        name: assetName.value.trim(), subType,
+        currentValue: val, costBasis: parseFloat(assetCost.value) || val,
+      })
+      toastMsg.value = '资产已更新'
+    } else {
+      if (!selectedCat.value) { toastMsg.value = '请选择资产分类'; showToast.value = true; return }
+      await assetStore.createAsset({
+        name: assetName.value.trim(), type: assetType.value, subType,
+        currentValue: val, costBasis: parseFloat(assetCost.value) || val,
+      })
+      toastMsg.value = '资产添加成功'
+    }
+    showModal.value = false; showToast.value = true; trackEvent('asset_edit')
+  } catch (err: any) { toastMsg.value = err.message || '保存失败'; showToast.value = true }
 }
 
 async function deleteAsset(id: string) {
@@ -169,14 +171,16 @@ async function saveLiability() {
     monthlyPayment: parseFloat(newLiability.value.monthlyPayment) || 0,
   }
 
-  if (editingLiabilityId.value) {
-    await assetStore.updateLiability(editingLiabilityId.value, data)
-    toastMsg.value = '负债已更新'
-  } else {
-    await assetStore.createLiability(data)
-    toastMsg.value = '负债添加成功'
-  }
-  showLiabilityModal.value = false; showToast.value = true; trackEvent('asset_edit')
+  try {
+    if (editingLiabilityId.value) {
+      await assetStore.updateLiability(editingLiabilityId.value, data)
+      toastMsg.value = '负债已更新'
+    } else {
+      await assetStore.createLiability(data)
+      toastMsg.value = '负债添加成功'
+    }
+    showLiabilityModal.value = false; showToast.value = true; trackEvent('asset_edit')
+  } catch (err: any) { toastMsg.value = err.message || '保存失败'; showToast.value = true }
 }
 
 async function deleteLiability(id: string) {

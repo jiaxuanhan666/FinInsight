@@ -3,11 +3,66 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <!-- GEO 基础：描述性标题。AI 引用时通常直接抓取 <title> 作为产品名 -->
+  <title>FinInsight — AI Personal Finance & Alternative Asset Tracker</title>
+
+  <!-- GEO 基础：一句话英文简介。ChatGPT/Perplexity 在归纳"这是什么产品"时主要读 description -->
+  <meta name="description" content="FinInsight is a free AI-powered personal finance tracker. Log daily income and expenses, record assets and liabilities, and let AI classify transactions and analyze your wealth — including niche and alternative assets like collectibles or flipped purchases." />
+  <meta name="keywords" content="personal finance, AI accounting, expense tracker, alternative assets, wealth management, budgeting, investment behavior" />
+  <meta name="author" content="FinInsight" />
   <meta name="theme-color" content="#09090f" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <!-- Open Graph：Facebook / LinkedIn / 多数 AI 爬虫读取的分享卡片信息 -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="FinInsight" />
+  <meta property="og:title" content="FinInsight — AI Personal Finance & Alternative Asset Tracker" />
+  <meta property="og:description" content="A free AI-powered finance tracker that logs income/expenses, records assets & liabilities, and uses AI to classify transactions and analyze your personal wealth — including niche alternative assets." />
+  <meta property="og:url" content="https://jiaxuanhan666.github.io/FinInsight/" />
+  <meta property="og:image" content="https://jiaxuanhan666.github.io/FinInsight/og-image.png" />
+
+  <!-- Twitter Card：X/Twitter 上的分享预览（海外社区分发必填） -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="FinInsight — AI Personal Finance & Alternative Asset Tracker" />
+  <meta name="twitter:description" content="Free AI finance tracker: log income/expenses, track assets & liabilities, and get AI-powered personal wealth analysis including alternative assets." />
+  <meta name="twitter:image" content="https://jiaxuanhan666.github.io/FinInsight/og-image.png" />
+
   <link rel="icon" href="/favicon.svg" />
-  <title>FinInsight</title>
+  <!-- canonical：告诉搜索引擎/AI 这是唯一权威地址，避免镜像分散权重 -->
+  <link rel="canonical" href="https://jiaxuanhan666.github.io/FinInsight/" />
+
+  <!-- JSON-LD 结构化数据：用 schema.org 标准把"产品是什么/有哪些功能"机器可读地声明出来，
+       是最强的 GEO 信号——AI 直接能从中抽取功能点，无需靠猜 -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "FinInsight",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web",
+    "url": "https://jiaxuanhan666.github.io/FinInsight/",
+    "description": "FinInsight is a free AI-powered personal finance tracker. Users log daily income and expenses, manually record assets and liabilities, and FinInsight uses AI (DeepSeek) to classify transactions and generate personal wealth analysis. It uniquely handles niche and alternative assets — for example, it can recognize a 'buy-then-resell' behavior (like buying a collectible doll and flipping it) as a quasi-investment and place it on the asset side.",
+    "featureList": [
+      "AI-powered transaction classification using DeepSeek",
+      "Daily income and expense tracking",
+      "Manual asset and liability recording for net-worth view",
+      "Alternative and niche asset handling, e.g. collectibles and flipped purchases",
+      "Personal wealth and investment-behavior analysis",
+      "Anonymous UUID-based multi-user data isolation"
+    ],
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "FinInsight"
+    }
+  }
+  </script>
 </head>
 <body>
   <div id="app"></div>

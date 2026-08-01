@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
+import { api } from '../services/api'
 
 interface UserStat {
   uuid: string; fullUuid: string; nickname: string; createdAt: number; lastActiveAt: number
@@ -21,8 +22,7 @@ let timer: any = null
 
 async function fetchData() {
   try {
-    const resp = await fetch('/api/analytics/dashboard')
-    data.value = await resp.json()
+    data.value = await api.get('/analytics/dashboard')
     loading.value = false
     updateChart()
   } catch { loading.value = false }

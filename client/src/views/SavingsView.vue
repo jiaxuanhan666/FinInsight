@@ -50,9 +50,11 @@ async function saveGoal() {
   const amount = parseFloat(newGoal.value.targetAmount)
   if (!amount || amount <= 0 || !newGoal.value.name.trim() || !newGoal.value.targetDate) { toastMsg.value = '请填写完整信息'; showToast.value = true; return }
   const data = { name: newGoal.value.name.trim(), targetAmount: amount, monthlyTarget: parseFloat(newGoal.value.monthlyTarget) || 0, targetDate: new Date(newGoal.value.targetDate).getTime() }
-  if (editingGoalId.value) { await savingsStore.updateGoal(editingGoalId.value, data); toastMsg.value = '目标已更新' }
-  else { await savingsStore.createGoal(data); toastMsg.value = '目标创建成功' }
-  showGoalModal.value = false; showToast.value = true; trackEvent('savings_goal_action')
+  try {
+    if (editingGoalId.value) { await savingsStore.updateGoal(editingGoalId.value, data); toastMsg.value = '目标已更新' }
+    else { await savingsStore.createGoal(data); toastMsg.value = '目标创建成功' }
+    showGoalModal.value = false; showToast.value = true; trackEvent('savings_goal_action')
+  } catch (err: any) { toastMsg.value = err.message || '保存失败'; showToast.value = true }
 }
 async function deleteGoal(id: string) { await savingsStore.deleteGoal(id); toastMsg.value = '已删除'; showToast.value = true }
 
@@ -61,11 +63,15 @@ function openProgress(goal: SavingsGoal) { progressGoal.value = goal; progressAm
 async function saveProgress() {
   const val = parseFloat(progressAmount.value)
   if (!val || val <= 0 || !progressGoal.value) { toastMsg.value = '请输入有效金额'; showToast.value = true; return }
-  await savingsStore.updateGoal(progressGoal.value.id, { currentAmount: progressGoal.value.currentAmount + val })
-  if (savingsStore.getProgress({ ...progressGoal.value, currentAmount: progressGoal.value.currentAmount + val }) >= 100) {
-    toastMsg.value = '恭喜达成目标！'
-  }
-  showProgressModal.value = false; showToast.value = true
+  try {
+    await savingsStore.updateGoal(progressGoal.value.id, { currentAmount: progressGoal.value.currentAmount + val })
+    if (savingsStore.getProgress({ ...progressGoal.value, currentAmount: progressGoal.value.currentAmount + val }) >= 100) {
+      toastMsg.value = '恭喜达成目标！'
+    } else {
+      toastMsg.value = '已记录'
+    }
+    showProgressModal.value = false; showToast.value = true; trackEvent('savings_goal_action')
+  } catch (err: any) { toastMsg.value = err.message || '保存失败'; showToast.value = true }
 }
 
 onMounted(async () => { await Promise.all([savingsStore.fetchGoals(), txStore.fetchSummary()]) })

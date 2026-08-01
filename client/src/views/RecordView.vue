@@ -62,7 +62,7 @@ function removeCustomCategory(name: string) {
 
 // Confirmation dialog
 const showConfirm = ref(false)
-const pendingTx = ref<{ id: string; note: string; amount: string }>({ id: '', note: '', amount: '' })
+const pendingTx = ref<{ id: string; note: string; amount: string; aiReasoning: string; aiConfidence: number }>({ id: '', note: '', amount: '', aiReasoning: '', aiConfidence: 0 })
 
 const filteredTxs = computed(() => {
   if (historyFilter.value === 'all') return txStore.transactions
@@ -102,7 +102,7 @@ async function submit() {
     const fAmount = form.value.amount
     form.value = { amount: '', type: 'expense', categoryNote: '', note: '', paymentMethod: '' }
     if (result.needsConfirmation) {
-      pendingTx.value = { id: result.id, note: catNote, amount: fAmount }
+      pendingTx.value = { id: String(result.id), note: catNote, amount: fAmount, aiReasoning: String(result.aiReasoning || ''), aiConfidence: Number(result.aiConfidence || 0) }
       showConfirm.value = true
     } else {
       toastMsg.value = result.aiCategory === 'alternative_asset' ? '已自动归入资产台账' : '记账成功'

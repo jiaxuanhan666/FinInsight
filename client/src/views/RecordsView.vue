@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTransactionStore } from '../stores/transaction'
 import { api } from '../services/api'
+import BottomSheet from '../components/ui/BottomSheet.vue'
 import Toast from '../components/ui/Toast.vue'
 
 const route = useRoute()
@@ -20,6 +21,7 @@ const payLabels: Record<string, string> = { card: '银行卡', wechat: '微信',
 
 function openPanel(tx: any) { panelTx.value = tx; panelCategory.value = tx.aiCategory || 'pure_consumption' }
 function closePanel() { panelTx.value = null }
+const panelTitle = computed(() => panelTx.value ? `修改 "${panelTx.value.categoryNote}" 的分类` : '')
 async function applyPanel() {
   if (!panelTx.value || panelCategory.value === panelTx.value.aiCategory) { closePanel(); return }
   await updateCategoryRaw(panelTx.value, panelCategory.value)
@@ -132,23 +134,20 @@ onMounted(async () => { await txStore.fetchTransactions('year') })
     </div>
 
     <!-- Category Edit Panel (bottom sheet) -->
-    <div v-if="panelTx" class="panel-overlay" @click.self="closePanel">
-      <div class="panel-sheet glass-card">
-        <div class="panel-hdr">修改 "{{ panelTx.categoryNote }}" 的分类</div>
-        <div class="panel-opts">
-          <button v-for="opt in catOptions" :key="opt.value"
-            class="panel-opt" :class="{active:panelCategory===opt.value}"
-            :style="panelCategory===opt.value?{borderColor:opt.color,color:opt.color,background:opt.color+'12'}:{}"
-            @click="panelCategory = opt.value">
-            <span class="panel-dot" :style="{background:opt.color}"></span> {{ opt.label }}
-          </button>
-        </div>
-        <div class="panel-ftr">
-          <button class="btn-glass" @click="closePanel">取消</button>
-          <button class="btn-glass primary" @click="applyPanel">确认</button>
-        </div>
+    <BottomSheet :show="!!panelTx" :title="panelTitle" @close="closePanel">
+      <div class="panel-opts">
+        <button v-for="opt in catOptions" :key="opt.value"
+          class="panel-opt" :class="{active:panelCategory===opt.value}"
+          :style="panelCategory===opt.value?{borderColor:opt.color,color:opt.color,background:opt.color+'12'}:{}"
+          @click="panelCategory = opt.value">
+          <span class="panel-dot" :style="{background:opt.color}"></span> {{ opt.label }}
+        </button>
       </div>
-    </div>
+      <template #footer>
+        <button class="btn-glass" @click="closePanel">取消</button>
+        <button class="btn-glass primary" @click="applyPanel">确认</button>
+      </template>
+    </BottomSheet>
 
     <Toast :message="toastMsg" :show="showToast" @close="showToast = false" />
   </div>
@@ -173,13 +172,9 @@ onMounted(async () => { await txStore.fetchTransactions('year') })
 .cat-toggle { padding: 6px 14px; border: 2px solid; border-radius: var(--radius-full); background: transparent; font-size: 13px; font-weight: 600; cursor: pointer; transition: all var(--dur-fast) var(--ease-smooth); white-space: nowrap; min-width: 52px; text-align: center; flex-shrink: 0; }
 .cat-toggle:hover { opacity: 0.65; }
 
-/* Bottom panel */
-.panel-overlay { position: fixed; inset: 0; background: rgba(9,9,15,0.7); backdrop-filter: blur(8px); display: flex; align-items: flex-end; justify-content: center; z-index: 300; }
-.panel-sheet { width: 100%; max-width: 480px; border-radius: var(--radius-2xl) var(--radius-2xl) 0 0; background: rgba(18,18,31,0.98); padding: 0; }
-.panel-hdr { padding: var(--space-lg); border-bottom: 1px solid var(--border-subtle); font-family: var(--font-display); font-size: var(--fs-md); font-weight: 600; }
-.panel-opts { padding: var(--space-md) var(--space-lg); display: flex; flex-direction: column; gap: 8px; }
+/* Bottom panel options (rendered inside BottomSheet) */
+.panel-opts { display: flex; flex-direction: column; gap: 8px; }
 .panel-opt { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font-size: var(--fs-md); cursor: pointer; transition: all var(--dur-fast) var(--ease-smooth); text-align: left; width: 100%; }
 .panel-opt:hover { border-color: var(--border-default); }
 .panel-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.panel-ftr { padding: var(--space-md) var(--space-lg); border-top: 1px solid var(--border-subtle); display: flex; gap: var(--space-sm); justify-content: flex-end; }
 </style>
