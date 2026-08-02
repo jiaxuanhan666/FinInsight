@@ -45,8 +45,7 @@ function updateDauChart() {
   })
 }
 
-function fmtDate(ts: number) { return ts ? new Date(ts).toLocaleDateString('zh-CN') : '-' }
-function fmtTime(ts: number) { return ts ? new Date(ts).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-' }
+function fmtTime(ts: number) { if (!ts) return '-'; const d = new Date(ts); return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` }
 function timeAgo(ts: number) {
   if (!ts) return '-'
   const diff = Date.now() - ts
@@ -125,14 +124,14 @@ onUnmounted(() => { dauChart?.dispose(); if (timer) clearInterval(timer) })
       </div>
       <div class="glass-card" style="padding:16px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-          <h2 style="font-family:var(--font-display);font-size:15px;font-weight:600;margin:0;">&#9672; 用户价值阶梯</h2>
+          <h2 style="font-family:var(--font-display);font-size:15px;font-weight:600;margin:0;">&#9672; 漏斗数据</h2>
           <button @click="exportFunnelCSV" class="btn-glass" style="padding:4px 12px;font-size:11px;">导出CSV</button>
         </div>
         <div v-if="data?.funnel" style="display:flex;flex-direction:column;gap:6px;">
           <div v-for="(f, i) in data.funnel" :key="f.stage" style="display:flex;align-items:center;gap:10px;">
             <span style="min-width:80px;font-size:13px;color:var(--text-secondary);">{{ f.stage }}</span>
             <div style="flex:1;height:28px;background:rgba(255,255,255,0.04);border-radius:6px;overflow:hidden;position:relative;">
-              <div :style="{width:f.pct+'%',height:'100%',background:['#a78bfa','#60a5fa','#34d399','#fbbf24'][i],borderRadius:'6px',transition:'width 0.6s ease'}"></div>
+              <div :style="{width:Math.max(f.pct,2)+'%',minWidth:f.count>0?'':'32px',height:'100%',background:['#a78bfa','#60a5fa','#34d399','#fbbf24'][i],borderRadius:'6px',transition:'width 0.6s ease',opacity:f.count>0?1:0.25}"></div>
             </div>
             <span style="min-width:60px;font-size:13px;font-weight:600;text-align:right;">{{ f.count }} 人</span>
             <span style="min-width:36px;font-size:12px;color:var(--text-muted);text-align:right;">{{ f.pct }}%</span>
