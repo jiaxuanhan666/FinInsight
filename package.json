@@ -2,6 +2,7 @@
   "name": "fininsight",
   "private": true,
   "scripts": {
+    "start": "cd server && npx tsx src/index.ts",
     "dev": "cd server && npm run dev",
     "build": "cd server && npm install"
   },
