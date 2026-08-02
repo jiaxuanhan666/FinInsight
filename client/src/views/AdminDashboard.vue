@@ -17,6 +17,23 @@ interface DashboardData {
   users: UserStat[]
 }
 
+const DASHBOARD_PASSWORD = 'fininsight2024'
+
+const unlocked = ref(sessionStorage.getItem('fininsight_admin_unlocked') === '1')
+const pwdInput = ref('')
+const pwdError = ref(false)
+
+function tryUnlock() {
+  if (pwdInput.value === DASHBOARD_PASSWORD) {
+    sessionStorage.setItem('fininsight_admin_unlocked', '1')
+    unlocked.value = true
+    pwdError.value = false
+  } else {
+    pwdError.value = true
+    pwdInput.value = ''
+  }
+}
+
 const data = ref<DashboardData | null>(null)
 const loading = ref(true)
 const dauChartRef = ref<HTMLElement>()
@@ -88,7 +105,22 @@ onUnmounted(() => { dauChart?.dispose(); if (timer) clearInterval(timer) })
 </script>
 
 <template>
-  <div style="max-width:1400px;margin:0 auto;padding:24px;font-family:var(--font-body);background:var(--bg-deep);min-height:100vh;color:var(--text-primary);">
+  <!-- Password Gate -->
+  <div v-if="!unlocked" style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg-deep);">
+    <div class="glass-card" style="padding:40px 32px;text-align:center;max-width:360px;width:90%;">
+      <div style="font-size:48px;margin-bottom:16px;color:var(--neon-purple);">&#9672;</div>
+      <h2 style="font-family:var(--font-display);font-size:20px;font-weight:700;margin:0 0 8px;">FinInsight 看板</h2>
+      <p style="font-size:13px;color:var(--text-muted);margin:0 0 24px;">请输入密码查看内测数据</p>
+      <form @submit.prevent="tryUnlock">
+        <input v-model="pwdInput" type="password" class="glass-input" placeholder="输入密码" style="text-align:center;margin-bottom:12px;" :style="pwdError ? {borderColor:'var(--neon-coral)'}:{}" />
+        <div v-if="pwdError" style="font-size:11px;color:var(--neon-coral);margin-bottom:12px;">密码错误，请重试</div>
+        <button type="submit" class="btn-glass primary" style="width:100%;padding:12px;">进入看板</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div v-else style="max-width:1400px;margin:0 auto;padding:24px;font-family:var(--font-body);background:var(--bg-deep);min-height:100vh;color:var(--text-primary);">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
       <h1 style="font-family:var(--font-display);font-size:22px;font-weight:700;margin:0;">&#9672; FinInsight 内测看板</h1>
       <span v-if="updatedAt" style="font-size:11px;color:var(--text-muted);">更新于 {{ updatedAt }} · 30s 自动刷新</span>
