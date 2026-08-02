@@ -20,31 +20,40 @@ analyticsRoute.post('/track', async (c) => {
   return c.json({ success: true })
 })
 
+function maxTime(items: any[], field: string): number {
+  if (!items.length) return 0
+  return Math.max(...items.map((i: any) => i[field] || 0))
+}
+
 analyticsRoute.get('/dashboard', async (c) => {
   const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
   const todayTs = todayStart.getTime()
 
-  const events = table('analyticsEvents')
+  // Count real users from all sources (transactions + analytics)
+  const txUuids = new Set(table('transactions').all().map((t: any) => t.userUuid))
+  const eventUuids = new Set(table('analyticsEvents').all().map((e: any) => e.userUuid))
+  const allUserUuids = [...new Set([...txUuids, ...eventUuids])]
+  const totalUsers = allUserUuids.length
 
-  // Count real users from transactions (more reliable than users table due to CORS history)
-  const allTxUuids = [...new Set(table('transactions').all().map((t: any) => t.userUuid))]
-  const totalUsers = allTxUuids.length
-
-  // Auto-repair: create missing user records
-  for (const uuid of allTxUuids) {
+  // Auto-repair: create missing user records (FIXED: use 'id' field)
+  for (const uuid of allUserUuids) {
     if (!table('users').get(uuid)) {
-      table('users').insert({ uuid, nickname: '', createdAt: Date.now(), lastActiveAt: Date.now() })
+      table('users').insert({ id: uuid, uuid, nickname: '', createdAt: Date.now(), lastActiveAt: Date.now() })
     }
   }
 
-  // Feature usage counts
-  const usersWithTx = allTxUuids.length
-  const usersWithReports = new Set(table('aiReports').all().map((r: any) => r.userUuid)).size
-  const usersWithAssets = new Set(table('assets').all().map((a: any) => a.userUuid)).size
-  const usersWithGoals = new Set(table('savingsGoals').all().map((g: any) => g.userUuid)).size
+  const events = table('analyticsEvents')
+  const allEvents = events.all()
 
-  // Today active (distinct UUIDs with any event today)
-  const todayActiveUsers = new Set(events.filter((e: any) => e.timestamp >= todayTs).map((e: any) => e.userUuid)).size
+  // Feature usage counts
+  const voiceUsers = new Set(allEvents.filter((e: any) => e.eventType === 'voice_used').map((e: any) => e.userUuid))
+  const txUsers = [...txUuids]
+  const reportUsers = new Set(table('aiReports').all().map((r: any) => r.userUuid))
+  const assetUsers = new Set(table('assets').all().map((a: any) => a.userUuid))
+  const goalUsers = new Set(table('savingsGoals').all().map((g: any) => g.userUuid))
+
+  // Today active
+  const todayActiveUsers = new Set(allEvents.filter((e: any) => e.timestamp >= todayTs).map((e: any) => e.userUuid)).size
 
   // 7-day DAU trend
   const dauTrend: { date: string; count: number }[] = []
@@ -52,41 +61,66 @@ analyticsRoute.get('/dashboard', async (c) => {
     const d = new Date(); d.setDate(d.getDate() - i); d.setHours(0, 0, 0, 0)
     const dEnd = new Date(d); dEnd.setDate(dEnd.getDate() + 1)
     const count = new Set(
-      events.filter((e: any) => e.timestamp >= d.getTime() && e.timestamp < dEnd.getTime()).map((e: any) => e.userUuid)
+      allEvents.filter((e: any) => e.timestamp >= d.getTime() && e.timestamp < dEnd.getTime()).map((e: any) => e.userUuid)
     ).size
     dauTrend.push({ date: d.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }), count })
   }
 
-  // Recent events timeline (last 30)
-  const recentEvents = events.all()
-    .filter((e: any) => e.timestamp)
-    .sort((a: any, b: any) => b.timestamp - a.timestamp)
-    .slice(0, 30)
-    .map((e: any) => ({
-      userUuid: (e.userUuid || '').slice(0, 8),
-      eventType: e.eventType,
-      timestamp: e.timestamp,
-    }))
+  // Funnel: user value ladder
+  const funnel = [
+    { stage: '总用户', count: totalUsers, pct: 100 },
+    { stage: '记过账', count: txUsers.length, pct: totalUsers > 0 ? Math.round(txUsers.length / totalUsers * 100) : 0 },
+    { stage: '用过语音记账', count: voiceUsers.size, pct: totalUsers > 0 ? Math.round(voiceUsers.size / totalUsers * 100) : 0 },
+    { stage: '生成过AI报告', count: reportUsers.size, pct: totalUsers > 0 ? Math.round(reportUsers.size / totalUsers * 100) : 0 },
+  ]
 
-  // User stats list
-  const userStats = allTxUuids.map(uuid => {
+  // User stats (behavior only, no financial data)
+  const userStats = allUserUuids.map(uuid => {
     const user = table('users').get(uuid) || {}
-    const txCount = table('transactions').count((t: any) => t.userUuid === uuid)
+
+    const userTxs = table('transactions').filter((t: any) => t.userUuid === uuid)
+    const txCount = userTxs.length
+    const lastTxTime = maxTime(userTxs, 'timestamp')
+
     const reportCount = table('aiReports').count((r: any) => r.userUuid === uuid)
+    const userReports = table('aiReports').filter((r: any) => r.userUuid === uuid)
+    const lastReportTime = maxTime(userReports, 'createdAt')
+
     const goalCount = table('savingsGoals').count((g: any) => g.userUuid === uuid)
-    const voiceCount = events.filter((e: any) => e.userUuid === uuid && e.eventType === 'voice_used').length
-    const todayVisits = events.filter((e: any) =>
-      e.userUuid === uuid && e.eventType === 'page_view' && e.timestamp >= todayTs
-    ).length
+
+    const userEvents = allEvents.filter((e: any) => e.userUuid === uuid)
+    const voiceCount = userEvents.filter((e: any) => e.eventType === 'voice_used').length
+    const lastVoiceTime = maxTime(userEvents.filter((e: any) => e.eventType === 'voice_used'), 'timestamp')
+
+    const assetEdits = userEvents.filter((e: any) => e.eventType === 'asset_edit').length
+    const lastAssetTime = maxTime(userEvents.filter((e: any) => e.eventType === 'asset_edit'), 'timestamp')
+
+    const goalEvents = userEvents.filter((e: any) => e.eventType === 'savings_goal_action' || e.eventType === 'savings_progress')
+    const lastGoalTime = maxTime(goalEvents, 'timestamp')
+
+    const todayVisits = userEvents.filter((e: any) => e.eventType === 'page_view' && e.timestamp >= todayTs).length
+
+    // Active days: distinct calendar dates with any activity
+    const activeDays = new Set(userEvents.map((e: any) => {
+      const d = new Date(e.timestamp)
+      return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`
+    })).size
 
     return {
       uuid: uuid.slice(0, 8) + '...', fullUuid: uuid,
-      nickname: user.nickname || '', createdAt: user.createdAt || 0, lastActiveAt: user.lastActiveAt || 0,
-      todayVisits, txCount, reportCount, goalCount, voiceCount,
+      nickname: user.nickname || '',
+      createdAt: user.createdAt || 0,
+      lastActiveAt: user.lastActiveAt || 0,
+      activeDays,
+      todayVisits,
+      txCount, lastTxTime,
+      reportCount, lastReportTime,
+      voiceCount, lastVoiceTime,
+      assetEdits, lastAssetTime,
+      goalCount, lastGoalTime,
     }
   })
 
-  // Sort by last active
   userStats.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
 
   return c.json({
@@ -97,13 +131,13 @@ analyticsRoute.get('/dashboard', async (c) => {
       totalReports: table('aiReports').count(),
     },
     featureUsage: {
-      transaction: totalUsers > 0 ? Math.round(usersWithTx / totalUsers * 100) : 0,
-      aiReport: totalUsers > 0 ? Math.round(usersWithReports / totalUsers * 100) : 0,
-      asset: totalUsers > 0 ? Math.round(usersWithAssets / totalUsers * 100) : 0,
-      savings: totalUsers > 0 ? Math.round(usersWithGoals / totalUsers * 100) : 0,
+      transaction: totalUsers > 0 ? Math.round(txUsers.length / totalUsers * 100) : 0,
+      aiReport: totalUsers > 0 ? Math.round(reportUsers.size / totalUsers * 100) : 0,
+      asset: totalUsers > 0 ? Math.round(assetUsers.size / totalUsers * 100) : 0,
+      savings: totalUsers > 0 ? Math.round(goalUsers.size / totalUsers * 100) : 0,
     },
     dauTrend,
-    recentEvents,
+    funnel,
     users: userStats,
   })
 })
