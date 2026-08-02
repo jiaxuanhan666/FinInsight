@@ -17,7 +17,7 @@ interface DashboardData {
   users: UserStat[]
 }
 
-const DASHBOARD_PASSWORD = 'fininsight2024'
+const DASHBOARD_PASSWORD = 'FinInsight@2026'
 
 const unlocked = ref(sessionStorage.getItem('fininsight_admin_unlocked') === '1')
 const pwdInput = ref('')
